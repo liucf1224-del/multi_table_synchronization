@@ -1,0 +1,36 @@
+# 线上(Linux)部署: docker compose up -d --build
+# 说明:
+#   - env_file 指向 .env(密码等敏感配置不进镜像、不进 build context)
+#   - logs 目录挂宿主机 /opt/tracking-sync/logs, 保存 binlog 断点位点, 重建容器不丢进度
+#   - restart: unless-stopped 保证宿主机重启/进程退出后自动拉起
+#
+# ★ 本项目的 服务名/镜像 tag/容器名/宿主卷路径 必须与 value_order、DataSynchronism
+#   两个同步项目全部区分开。三个项目当前各自的值:
+#     value_order      -> 镜像/容器 value-orders-sync, 宿主卷 /opt/value-orders/logs
+#     DataSynchronism  -> 它自己的 tag / 卷
+#     本项目 tracking  -> 镜像/容器 tracking-sync, 宿主卷 /opt/tracking-sync/logs（见下方）
+#   历史上三个项目曾共用同一个 tag 和同一个宿主目录, 后果是:
+#     1) 容器名冲突 -> 后来者 docker compose up 直接报 Conflict 起不来
+#     2) 镜像 tag 被覆盖 -> 老项目一重启就变成跑新项目的代码(静默跑错表)
+#     3) 宿主卷共用 -> 两个进程互相覆盖 binlog_pos.txt 断点, 必然漏数据/乱重放
+services:
+  tracking-sync:
+    build: .
+    image: tracking-sync:latest
+    container_name: tracking-sync
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - TZ=Asia/Shanghai      # 只影响容器内日志时间; 数据时区由 .env 的 TIME_ZONE 控制
+    volumes:
+      # 断点/日志落在这里(项目目录之外): /opt/tracking-sync/logs/binlog_pos.txt
+      # ★ 首次启动前该目录不能有 binlog_pos.txt, 否则会当成"续传"跳过全量回填
+      # ★ 绝不能和其它同步项目共用同一个宿主目录
+      - /opt/tracking-sync/logs:/app/logs
+    logging:
+      # 容器默认 json-file 无上限, 常驻进程会把磁盘写满; 这里限 20MB x 3
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"

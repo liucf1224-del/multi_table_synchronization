@@ -1,0 +1,19 @@
+# ===== 敏感配置: 绝不提交, 服务器上各自维护 =====
+# .env 里有数据库账号密码(仅 root 可读: chmod 600 .env)
+.env
+
+# ===== 运行产物 =====
+logs/
+*.log
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# ===== 编辑器 / 系统 =====
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
